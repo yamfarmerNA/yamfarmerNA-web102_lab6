@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AstroDash Weather Dashboard</title>
+    <!-- Link to your CSS file -->
+    <link rel="stylesheet" href="./App.css" />
+    <!-- Load React and ReactDOM from CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Load Babel for in-browser JSX transformation (not for production) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      // React component code goes here
+      const { useState, useEffect } = React;
+
+      function App() {
+        const [weatherData, setWeatherData] = useState([]);
+        const [searchTerm, setSearchTerm] = useState('');
+        const [filterPhase, setFilterPhase] = useState('All');
+        const [loading, setLoading] = useState(true);
+        const [error, setError] = useState(null);
+
+        // Summary statistics
+        const [lowTemp, setLowTemp] = useState(0);
+        const [moonRise, setMoonRise] = useState('');
+        const [moonPhase, setMoonPhase] = useState('');
+
+        // Fetch data from Weatherbit API using useEffect and async/await
+        useEffect(() => {
+          const fetchWeatherData = async () => {
+            try {
+              // IMPORTANT: Replace 'YOUR_API_KEY' with your actual Weatherbit API key
+              const apiKey = 'YOUR_API__KEY'; //INSERT YOUR API KEY HERE
+              const city = 'Houston'; // You can change this to any city
+              const url = `https://api.weatherbit.io/v2.0/forecast/daily?city=${city}&key=${apiKey}`;
+
+              const response = await fetch(url);
+              if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+              }
+              const data = await response.json();
+
+              // The API returns a forecast, so we can use the daily data
+              // Get the next 10 days for display
+              const dailyData = data.data.slice(0, 10);
+              setWeatherData(dailyData);
+              setLoading(false);
+
+              // Calculate summary statistics from the fetched data
+              if (dailyData.length > 0) {
+                // Find the minimum low temperature from the daily forecast
+                const minTemp = Math.min(...dailyData.map(item => item.low_temp));
+                setLowTemp(minTemp);
+
+                // Get moonrise time for the first day
+                const firstMoonRise = dailyData[0].moonrise_ts;
+                if (firstMoonRise) {
+                  setMoonRise(new Date(firstMoonRise * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+                }
+
+                // Get moon phase for the first day
+                const firstMoonPhase = dailyData[0].moon_phase_lunation;
+                if (firstMoonPhase) {
+                  setMoonPhase(getMoonPhaseName(firstMoonPhase));
+                }
+              }
+
+            } catch (error) {
+              console.error('Failed to fetch weather data:', error);
+              setError('Failed to fetch data. Please check your API key and network connection.');
+              setLoading(false);
+            }
+          };
+
+          fetchWeatherData();
+        }, []); // Empty dependency array means this effect runs once on component mount
+
+        // Helper function to get moon phase name based on lunation value (0-1)
+        const getMoonPhaseName = (lunation) => {
+          if (lunation === 0) return 'New Moon';
+          if (lunation > 0 && lunation < 0.25) return 'Waxing Crescent';
+          if (lunation === 0.25) return 'First Quarter';
+          if (lunation > 0.25 && lunation < 0.5) return 'Waxing Gibbous';
+          if (lunation === 0.5) return 'Full Moon';
+          if (lunation > 0.5 && lunation < 0.75) return 'Waning Gibbous';
+          if (lunation === 0.75) return 'Last Quarter';
+          if (lunation > 0.75 && lunation < 1) return 'Waning Crescent';
+          return 'Unknown'; // Fallback for unexpected values
+        };
+
+        // Filter data based on search term (date) and moon phase filter
+        const filteredData = weatherData
+          .filter(item =>
+            // Search filter: checks if the valid_date includes the search term (case-insensitive)
+            item.valid_date.toLowerCase().includes(searchTerm.toLowerCase())
+          )
+          .filter(item =>
+            // Moon phase filter: checks if the selected filterPhase is 'All' or matches the item's moon phase
+            filterPhase === 'All' || getMoonPhaseName(item.moon_phase_lunation) === filterPhase
+          );
+
+        // Event handler for search bar input changes
+        const handleSearchChange = (event) => {
+          setSearchTerm(event.target.value);
+        };
+
+        // Event handler for moon phase filter dropdown changes
+        const handleFilterChange = (event) => {
+          setFilterPhase(event.target.value);
+        };
+
+        // Display loading message while data is being fetched
+        if (loading) {
+          return <div className="loading-state">Loading dashboard...</div>;
+        }
+
+        // Display error message if data fetching fails
+        if (error) {
+          return <div className="error-state">{error}</div>;
+        }
+
+        return (
+          <div className="dashboard-container">
+            <header className="dashboard-header">
+              <h1>AstroDash</h1>
+              <nav className="sidebar">
+                <ul>
+                  <li>Dashboard</li>
+                  <li>Search</li>
+                  <li>About</li>
+                </ul>
+              </nav>
+            </header>
+
+            <main className="dashboard-content">
+              {/* Summary Statistics Section */}
+              <section className="summary-stats">
+                <div className="stat-card">
+                  <h2>{lowTemp}°F</h2>
+                  <p>Low Temp</p>
+                </div>
+                <div className="stat-card">
+                  <h2>{moonRise}</h2>
+                  <p>Moon Rise</p>
+                </div>
+                <div className="stat-card">
+                  <h2>{moonPhase}</h2>
+                  <p>Moon Phase</p>
+                </div>
+              </section>
+
+              {/* Data Table Section with Search and Filter */}
+              <section className="data-table">
+                <div className="controls">
+                  {/* Search Bar */}
+                  <input
+                    type="text"
+                    placeholder="Enter Date (YYYY-MM-DD)"
+                    value={searchTerm}
+                    onChange={handleSearchChange}
+                  />
+                  {/* Moon Phase Filter Dropdown */}
+                  <select value={filterPhase} onChange={handleFilterChange}>
+                    <option value="All">Moon Phase: All</option>
+                    <option value="New Moon">New Moon</option>
+                    <option value="Waxing Crescent">Waxing Crescent</option>
+                    <option value="First Quarter">First Quarter</option>
+                    <option value="Waxing Gibbous">Waxing Gibbous</option>
+                    <option value="Full Moon">Full Moon</option>
+                    <option value="Waning Gibbous">Waning Gibbous</option>
+                    <option value="Last Quarter">Last Quarter</option>
+                    <option value="Waning Crescent">Waning Crescent</option>
+                  </select>
+                </div>
+
+                {/* Weather Data Table */}
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Temperature</th>
+                      <th>Moon Rise</th>
+                      <th>Moon Set</th>
+                      <th>Moon Phase</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* Dynamically render table rows using .map() */}
+                    {filteredData.map(item => (
+                      <tr key={item.valid_date}> {/* Using valid_date as a unique key */}
+                        <td>{item.valid_date}</td>
+                        <td>{item.temp}°F</td>
+                        {/* Convert Unix timestamps to human-readable time */}
+                        <td>{new Date(item.moonrise_ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                        <td>{new Date(item.moonset_ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                        <td>{getMoonPhaseName(item.moon_phase_lunation)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {/* Display message if no results are found after filtering */}
+                {filteredData.length === 0 && <p className="no-results">No results found.</p>}
+              </section>
+            </main>
+          </div>
+        );
+      }
+
+      // Render the App component into the root div
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(<App />);
+    </script>
+  </body>
+</html>
